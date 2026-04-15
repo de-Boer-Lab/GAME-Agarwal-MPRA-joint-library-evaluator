@@ -65,7 +65,7 @@ The input is `Lenti_mpra.txt` — the full sequence of the lentiviral MPRA vecto
 
 1. **Split on the N-run** — the plasmid sequence is split at the first run of 200 or more `N` bases. Everything before the N-run becomes `upstream_padded`; everything after becomes `downstream`. The 200bp Ns are a placeholder for any probe. 
 
-2. **Locate the TSS** — the transcription start site of the reporter gene is identified by searching for the sequence `ATGGTGAGCAAGGG` (the start codon of the fluorescent reporter). Its position within the full plasmid sequence is recorded as `start_tss`.
+2. **Locate the TSS** — the transcription start site of the reporter gene (EGFP) is identified by searching for the sequence `ATGGTGAGCAAGGG` (the start codon of the fluorescent reporter). Its position within the full plasmid sequence is recorded as `start_tss`.
 
 3. **Define promoter coordinates** — the reporter gene body is defined as a 720 bp window starting at `start_tss`: `[start_tss, start_tss + 720]`. These coordinates are stored as `promoter_coordinates` and are used as the shared `prediction_ranges` for all sequences in the evaluator request.
 
