@@ -51,7 +51,7 @@ Note: `2023-03-03628C-Table S10 - joint lib design.xlsx` table was filtered to o
 
 3. **Filter sequences** — only sequences present in the filtered measured values file are kept.
 
-4. **Trim adaptors** — the 15 nt 5′ and 15 nt 3′ adaptors are clipped from each 230 nt sequence, yielding the 200 nt regulatory element. All trimmed sequences are verified to be exactly 200 nt.
+4. **Trim adaptors** — the 15 nt 5′ and 15 nt 3′ adaptors are clipped from each 230 nt sequence, yielding the 200 nt regulatory element. All trimmed sequences are verified to be exactly 200 nt (the adapter sequences are included in the backbone).
 
 5. **Save outputs** — the processed sequences and measurements are saved as `56k_measured_final_sequence_file.xlsx` and `56k_measured_file.xlsx` respectively.
 
@@ -63,7 +63,7 @@ The input is `Lenti_mpra.txt` — the full sequence of the lentiviral MPRA vecto
 
 ### How `upstream_downstream_backbone.txt` was generated
 
-1. **Split on the N-run** — the plasmid sequence is split at the first run of 200 or more `N` bases. Everything before the N-run becomes `upstream_padded`; everything after becomes `downstream`.
+1. **Split on the N-run** — the plasmid sequence is split at the first run of 200 or more `N` bases. Everything before the N-run becomes `upstream_padded`; everything after becomes `downstream`. The 200bp Ns are a placeholder for any probe. 
 
 2. **Locate the TSS** — the transcription start site of the reporter gene is identified by searching for the sequence `ATGGTGAGCAAGGG` (the start codon of the fluorescent reporter). Its position within the full plasmid sequence is recorded as `start_tss`.
 
