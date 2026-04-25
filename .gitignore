@@ -7,9 +7,18 @@
 # Python cache files
 __pycache__/
 *.pyc
+*.pyo
 
 # Large predictions directories
+predictions/
 *_predictions/
-*log
+log/
+logs/
 
+# Tarballs
 *.tar.gz
+
+# Dev/test scratch
+test/
+time-test-pred-eval/
+uncont-tests/
