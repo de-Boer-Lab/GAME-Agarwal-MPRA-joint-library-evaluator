@@ -3,14 +3,19 @@ From: python:3.13-slim
 Stage: build
 
 %files
-    ../Agarwal_Joint_Library/ /Agarwal_Joint_Library
+    # Copy evaluator scripts and utilities into the container
+    ./config.py /agarwal-joint-lib/config.py
+    ./data_loader.py /agarwal-joint-lib/data_loader.py
+    ./evaluator_content_handler.py /agarwal-joint-lib/evaluator_content_handler.py
+    ./evaluator_metrics_calculator.py /agarwal-joint-lib/evaluator_metrics_calculator.py
+    ./evaluator_RestAPI.py /agarwal-joint-lib/evaluator_RestAPI.py
 
 %environment
     # Prevent automatic binding of host directories
     export APPTAINER_NO_MOUNT="home,tmp,proc,sys,dev"
     export LC_ALL=C
     export PATH="/usr/local/bin:$PATH"
-    export PYTHONPATH="/Agarwal_Joint_Library:$PYTHONPATH"
+    export PYTHONPATH="/agarwal-joint-lib/:$PYTHONPATH"
 
 %post
     # Install system packages and dependencies
@@ -24,62 +29,50 @@ Stage: build
     python -m pip install --no-cache-dir numpy tqdm pandas openpyxl msgpack scipy requests
 
     # Set permissions to access all directories
-    echo "Setting permissions for directories and script..."
-    chmod -R 755 /Agarwal_Joint_Library
+    echo "Setting permissions for the main directory and script..."
+    chmod -R 755 /agarwal-joint-lib
+    chmod +x /agarwal-joint-lib/evaluator_RestAPI.py
 
 %runscript
     # This section defines the default run behavior of the container
-    exec python3 /Agarwal_Joint_Library/evaluator_RestAPI.py "$@"
+    exec python3 /agarwal-joint-lib/evaluator_RestAPI.py "$@"
 
 %startscript
-    exec python3 /Agarwal_Joint_Library/evaluator_RestAPI.py "$@"
+    exec python3 /agarwal-joint-lib/evaluator_RestAPI.py "$@"
 
 %labels
     Author "Satyam Priyadarshi"
-    Version "4.0"
+    game_schema_version "1.0"
     Description "This container is the Evaluator set up for Genomic API for Model Evaluation for Agarwal et al. (2025) Joint Library dataset. 
     The dataset consists of measured potential enhancers and promoters tested in HepG2, K562, and WTC11 cells, along with control elements, 
     enabling standardized evaluation of genomic models."
 
 %help
     This container includes:
-    - Evaluator API script for genomic sequence evaluation.
-    - Evaluator utility script with helper functions.
+    - Evaluator (client) API script for genomic sequence evaluation.
+    - Evaluator utility scripts with helper functions.
     - Evaluation metrics script for correlation and specificity calculation.
     - Installed Python dependencies required by the Evaluator.
 
     **Usage:**
     We encourage using pre-built containers for this model that are hosted on Zenodo.
 
-    However, if you are building the container using this definition file, ensure you have the following directory structure on the host:
-    ```
-    /evaluator_script_and_utils/
-    ├── README.md
-    ├── evaluator_RestAPI.py
-    ├── evaluator_content_handler.py
-    ├── evaluator_data
-    │   └── 2023-03-03628-s5/
-    ├── config.py
-    ├── evaluator_metrics_calculator.py
-    └── predictions/
-    ```
-
-    Build the container (SIF)
-    ```
-    apptainer build agarwal_evaluator.sif agarwal_evaluator.def
-    ```
-
     Bind these directories and run the container:
     ```bash
-    apptainer run \
+    apptainer run --containall \
       -B absolute/path/to/evaluator_data:/evaluator_data \
       -B absolute/path/to/predictions:/predictions \
       agarwal_evaluator.sif PREDICTOR_HOST PREDICTOR_PORT /predictions
     ```
     
     Details:
-    - The container sends and receives data via a TCP socket and requires directories to be mounted.
+    - The container requests and receives predictions using HTTP protocol and requires directories to be mounted at runtime.
     - Replace `PREDICTOR_HOST` and `PREDICTOR_PORT` with the server IP and port configuration.
+
+    API Endpoints for Predictor:
+    - `POST /predict`: Request predictions for given sequences.
+    - `GET /help`: Request HELP file from the Predictor.
+    - `GET /formats`: Request supported request/receive serialization formats from the Predictor.
 
     Purpose:
     - Facilitates genomic sequence evaluation by interacting with the Predictor container.
