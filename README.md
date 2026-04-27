@@ -114,18 +114,23 @@ The measurements for each probe are stored in `56k_measured_file.xlsx` in the `e
 
 ## Directory Structure
 
-```
-Agarwal_2025/
-├── evaluator_RestAPI.py                # Main entry point
-├── config.py                           # Settings (name, paths, formats, retries)
-├── data_loader.py                      # Loads Excel + backbone, builds request payload
-├── evaluator_content_handler.py        # Format negotiation, HTTP POST, deserialization
-├── evaluator_metrics_calculator.py     # Pearson r, cell-type specificity, and CSV output
-├── agarwal_evaluator.def               # Apptainer container definition
-└── evaluator_data/
-    └── 2023-03-03628-s5/
-        ├── 56k_measured_final_sequence_file.xlsx
-        └── upstream_downstream_backbone.txt
+```text
+GAME-Agarwal-MPRA-joint-library-evaluator/
+├── agarwal_joint_library
+│   ├── agarwal_evaluator.def                 # Apptainer container definition          
+│   ├── config.py                             # Settings (name, paths, formats, retries)
+│   ├── data_loader.py                        # Loads xlsx file + backbone, builds request payload
+│   ├── evaluator_content_handler.py          # Format negotiation, HTTP POST, deserialization
+│   ├── evaluator_data
+│   │   ├── 2023-03-03628-s5/
+│   │   │   ├── 56k_measured_file.xlsx                  # Measured log2(RNA/DNA) per cell type
+│   │   │   └── 56k_measured_final_sequence_file.xlsx   # 200 nt regulatory element sequences
+│   │   ├── make_56k_filtered_file.py         # Data prep script
+│   │   ├── README.md
+│   │   └── upstream_downstream_backbone.txt  # Plasmid backbone + promoter coords
+│   ├── evaluator_metrics_calculator.py       # Pearson r, cell-type specificity, and CSV output
+│   └── evaluator_RestAPI.py                  # Main entry point -- client script
+└── README.md
 ```
 
 ---
