@@ -2,11 +2,10 @@
 
 import os
 import json
-import msgpack
 from collections import Counter
 import functools
 import pandas as pd
-from config import EVALUATOR_INPUT_PATH, input_file
+from config import EVALUATOR_INPUT_PATH, PLASMID_BACKBONE_INPUT_PATH
 
 class DuplicateKeysError(ValueError):
     """Raised when duplicate keys are found in a JSON object."""
@@ -50,9 +49,12 @@ def _process_results(data, duplicate_keys):
     Args:
         data (dict): The dictionary of parsed data. 
         duplicate_keys (dict): The dictionary of duplicates.
-
+    
+    Raises:
+        DuplicateKeysError: If duplicate keys are found in the JSON structure.
+        
     Returns:
-        data or None: The parsed data if no duplicates. None, if duplicates are found.
+        data: The parsed data if no errors or duplicates are found.
     """
     # Report duplicates if any were found
     if duplicate_keys:
@@ -86,7 +88,7 @@ def check_duplicates_from_string(json_string):
         DuplicateKeysError: If duplicate keys are found in the JSON structure.
 
     Returns:
-        dict: The parsed data if no errors or duplicates are found.
+        dict or list: The parsed data if no errors or duplicates are found.
     """
 
     # Initialize a dictionary to track duplicate keys and their counts
@@ -113,6 +115,9 @@ def check_duplicates_from_json(json_file_path):
     before they are processed into a dictionary. If duplicates are detected at any level, they
     are reported with their counts and paths. Keys reused in separate objects within arrays 
     (e.g. lists) are not considered duplicates.
+    
+    Args:
+        json_file_path (str): The path to the JSON file to parse and check for duplicates.
 
     Raises:
         FileNotFoundError: If the specified file does not exist.
@@ -120,7 +125,7 @@ def check_duplicates_from_json(json_file_path):
         DuplicateKeysError: If duplicate keys are found in the JSON structure.
 
     Returns:
-        dict: The parsed data if no errors or duplicates are found.
+        dict or list: The parsed data if no errors or duplicates are found.
     """
 
     # Initialize a dictionary to track duplicate keys and their counts
@@ -140,23 +145,19 @@ def check_duplicates_from_json(json_file_path):
 def create_json_from_xlsx():
     """
     Loads and validates the input file specified in `config.py`.
-    Parses an Excel file, extracts to Pandas DataFrame to create a JSON object to be sent to a Predictor.
-
+    Parses an Excel file, extracts to Pandas DataFrame, and creates a JSON object for the Predictor.
     
     This function checks for file existence and output directory, handles JSON or MsgPack formats,
     and runs duplicate key validation.
-    Args:
-        input_file_path (str): Path to the XLSX file.
 
     Returns:
-        data_dict (dict): The validated data dictionary if loading and validation are successful.
+        evaluator_dict (dict): The constructed JSON object containing request payload.
 
     Raises:
         FileNotFoundError: If the input file specified in `EVALUATOR_INPUT_PATH` 
                            does not exist.
-        ValueError: If the file type is unsupported (not .json, .msgpack, or .mpk),
-                    or if the data is malformed (e.g. invalid JSON/MsgPack),
-                    or if duplicate keys are found via `evaluator_utils`.
+        ValueError: If the data is malformed (e.g. invalid JSON/MsgPack),
+                    or if duplicate keys are found during validation.
 
     """
 
@@ -168,6 +169,18 @@ def create_json_from_xlsx():
     try:
         # Read the Excel file, treating the second row as the header (skipping the empty first row)
         df = pd.read_excel(EVALUATOR_INPUT_PATH, header=0)
+
+        # Load the backbone
+        backbone = pd.read_csv(PLASMID_BACKBONE_INPUT_PATH, header=0, sep= '\t', index_col=0)
+        print(backbone)
+
+        # get sequences from backbone
+        upstream_seq = backbone.loc["upstream_padded", "sequence"]
+        downstream_seq = backbone.loc["downstream", "sequence"]
+        promoter_coordinates = json.loads(backbone.loc["promoter_coordinates", "sequence"])
+        
+        # print(f"DEBUG: promoter_coordinates type: {type(promoter_coordinates)}")
+        # print(f"DEBUG: promoter_coordinates value: {promoter_coordinates}")
         
         # Extract the first column (seq_id (names)) and the last column (sequences -- "230nt sequence (15nt 5' adaptor - 200nt element - 15nt 3' adaptor)")
         names = df.iloc[:, 0]      # sequence ID
@@ -176,8 +189,12 @@ def create_json_from_xlsx():
         # Create a dictionary, mapping each sequence name to its corresponding sequence
         sequence_dict = dict(zip(names, sequences))
         
+        # Add predictions ranges that span the gene (69bp)
+        prediction_ranges = {name: promoter_coordinates for name in sequence_dict.keys()}
+
         # Define the prediction tasks as a separate variable
-        prediction_tasks = [
+        prediction_tasks_str = """
+        [
             {
                 "name": "agarwal_joint_lib_wtc11",
                 "type": "expression",
@@ -200,22 +217,84 @@ def create_json_from_xlsx():
                 "species": "homo_sapiens"
             }
         ]
+        """
+        # print(f"prediction_tasks_str type: {type(prediction_tasks_str)}")
+        
+        # Check for duplicate keys in prediction_tasks
+        prediction_tasks = check_duplicates_from_string(prediction_tasks_str)
+        # print(f"prediction_tasks type: {type(prediction_tasks)}")
         
         # Build the JSON evaluator object
         evaluator_dict = {
             "readout": "point",
             "prediction_tasks": prediction_tasks,
-            "sequences": sequence_dict
+            "upstream_seq": upstream_seq,
+            "downstream_seq": downstream_seq,
+            "sequences": sequence_dict,
+            "prediction_ranges": prediction_ranges
         }
         
         # Convert the dictionary to a JSON string with indentation for readability
-        json_string = json.dumps(evaluator_dict)
-        json_string = check_duplicates_from_string(json_string)
-        print("Input data loaded and validated successfully.")
-        return json_string
+        json_string = json.dumps(evaluator_dict, indent=4)
         
-    except (json.JSONDecodeError,
-        DuplicateKeysError) as e:
+        # Final validation check
+        check_duplicates_from_string(json_string)
+        print("Input data loaded and validated successfully.")
+        
+        return evaluator_dict
+        
+    except (json.JSONDecodeError, DuplicateKeysError, KeyError) as e:
         # Raise a general ValueError that the main script's handler
         # will catch and report cleanly
         raise ValueError(f"Input data is invalid.\nDetails: {e}") from e
+
+if __name__ == '__main__':
+    try:
+        evaluator_dict = create_json_from_xlsx()
+        
+        # Basic structure checks
+        expected_keys = {"readout", "prediction_tasks", "upstream_seq", "downstream_seq", "sequences", "prediction_ranges"}
+        actual_keys = set(evaluator_dict.keys())
+        missing = expected_keys - actual_keys
+        extra = actual_keys - expected_keys
+        
+        if missing:
+            print(f"FAIL: Missing keys: {missing}")
+        if extra:
+            print(f"INFO: Extra keys (not necessarily wrong): {extra}")
+        if not missing:
+            print("PASS: All expected keys present.")
+        
+        # Type checks
+        assert isinstance(evaluator_dict["sequences"], dict), "FAIL: 'sequences' is not a dict"
+        assert isinstance(evaluator_dict["prediction_tasks"], list), "FAIL: 'prediction_tasks' is not a list"
+        assert isinstance(evaluator_dict["prediction_ranges"], dict), "FAIL: 'prediction_ranges' is not a dict"
+        assert isinstance(evaluator_dict["upstream_seq"], str), "FAIL: 'upstream_seq' is not a string"
+        assert isinstance(evaluator_dict["downstream_seq"], str), "FAIL: 'downstream_seq' is not a string"
+        print("PASS: All type checks passed.")
+        
+        # Count checks
+        num_seqs = len(evaluator_dict["sequences"])
+        num_ranges = len(evaluator_dict["prediction_ranges"])
+        num_tasks = len(evaluator_dict["prediction_tasks"])
+        print(f"Sequences: {num_seqs}, Prediction ranges: {num_ranges}, Tasks: {num_tasks}")
+        
+        assert num_seqs == num_ranges, f"FAIL: sequences ({num_seqs}) != prediction_ranges ({num_ranges})"
+        assert num_seqs > 0, "FAIL: No sequences loaded"
+        assert num_tasks > 0, "FAIL: No prediction tasks loaded"
+        print("PASS: Count checks passed.")
+        
+        # Sample output
+        first_seq_id = next(iter(evaluator_dict["sequences"]))
+        print(f"\nSample sequence ID: {first_seq_id}")
+        print(f"Sample sequence (first 50 chars): {evaluator_dict['sequences'][first_seq_id][:50]}...")
+        print(f"Sample prediction_range: {evaluator_dict['prediction_ranges'][first_seq_id]}")
+        print(f"Upstream seq length: {len(evaluator_dict['upstream_seq'])}")
+        print(f"Downstream seq length: {len(evaluator_dict['downstream_seq'])}")
+        
+        print("\n=== ALL CHECKS PASSED ===")
+        
+    except Exception as e:
+        print(f"\n=== TEST FAILED ===\n{e}")
+        import traceback
+        traceback.print_exc()
