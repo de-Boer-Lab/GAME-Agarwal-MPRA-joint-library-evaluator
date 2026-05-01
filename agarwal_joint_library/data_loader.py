@@ -249,6 +249,7 @@ def create_json_from_xlsx():
         raise ValueError(f"Input data is invalid.\nDetails: {e}") from e
 
 if __name__ == '__main__':
+    # ---- TEST SUITE (Remove this for other Evaluators) ----
     try:
         evaluator_dict = create_json_from_xlsx()
         
