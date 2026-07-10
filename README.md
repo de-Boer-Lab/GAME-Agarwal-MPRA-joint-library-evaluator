@@ -1,6 +1,6 @@
 # GAME Agarwal MPRA Joint Library Evaluator
 
-Agarwal et al. (https://www.nature.com/articles/s41586-024-08430-9) MPRA evaluator first requests log-scale predictions for ~56k probes across WTC11, K562, and HepG2 cells. It then calculates Pearson correlations between predicted and measured $(\log_2(rna/dna))$. It also assesses cell-type specificity by correlating predicted vs. observed expression differences.
+Agarwal et al. (https://www.nature.com/articles/s41586-024-08430-9) MPRA evaluator first requests log-scale predictions for ~56k probes across WTC11, K562, and HepG2 cells. It then calculates Pearson correlations between predicted and measured expression $(\log_2(rna/dna))$. It also assesses cell-type specificity by correlating predicted vs. observed expression differences.
 
 ## Important Links
 
