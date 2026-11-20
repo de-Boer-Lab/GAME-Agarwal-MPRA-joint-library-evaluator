@@ -33,7 +33,7 @@ A tab-separated file containing the plasmid backbone sequences that flank each r
 |---|---|
 | `upstream_padded` | Upstream flanking sequence prepended to each element |
 | `downstream` | Downstream flanking sequence appended to each element |
-| `promoter_coordinates` | JSON-encoded `[start, end]` coordinates of the promoter within the full construct, shared across all sequences |
+| `promoter_coordinates` | JSON-encoded `[start, end]` coordinates of the 720 bp EGFP reporter gene within the full construct, shared across all sequences. 0-indexed and half-open (`end` is exclusive) |
 
 ---
 
@@ -67,7 +67,7 @@ The input is `Lenti_mpra.txt` — the full sequence of the lentiviral MPRA vecto
 
 2. **Locate the TSS** — the transcription start site of the reporter gene (EGFP) is identified by searching for the sequence `ATGGTGAGCAAGGG` (the start codon of the fluorescent reporter). Its position within the full plasmid sequence is recorded as `start_tss`.
 
-3. **Define promoter coordinates** — the reporter gene body is defined as a 720 bp window starting at `start_tss`: `[start_tss, start_tss + 720]`. These coordinates are stored as `promoter_coordinates` and are used as the shared `prediction_ranges` for all sequences in the evaluator request.
+3. **Define promoter coordinates** — the reporter gene body is defined as a 720 bp window starting at `start_tss`: `[start_tss, start_tss + 720]`. These coordinates are stored as `promoter_coordinates` and are used as the shared `prediction_ranges` for all sequences in the evaluator request. Ranges are half-open (`end` is exclusive), so the window is exactly the 720 bp reporter gene.
 
 ### Output format
 
