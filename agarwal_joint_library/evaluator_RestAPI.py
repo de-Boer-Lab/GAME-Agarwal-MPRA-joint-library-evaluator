@@ -91,11 +91,11 @@ def run_evaluator(predictor_ip, predictor_port, output_dir):
         return
 
     # Calculate and save final metrics. A task is only scored if its predictions are for exactly the sequences that were
-    # sent.
-    if is_success_response:
-        calculate_and_save_metrics(saved_predictions_path, output_dir, data_dict["sequences"].keys())
-    else:
-        print("Skipping metrics calculation because the Predictor did not return a 200 OK status.")
+    # sent; metrics that cannot be calculated (a task with an error, incomplete predictions, or the Predictor not
+    # returning a 200 OK status) are recorded as "NaN".
+    if not is_success_response:
+        print("The Predictor did not return a 200 OK status: all metrics will be recorded as NaN.")
+    calculate_and_save_metrics(saved_predictions_path, output_dir, data_dict["sequences"].keys())
 
 if __name__ == '__main__':
     # Check that mandatory arguments are passed to the script

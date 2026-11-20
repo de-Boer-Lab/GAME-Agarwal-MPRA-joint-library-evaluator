@@ -426,11 +426,9 @@ def calculate_and_save_metrics(saved_predictions_path, output_dir, sequence_ids=
             if (
                 "prediction_tasks" not in predictions_file_content or
                 # Also flag cases in case prediction_tasks key is returned empty
-                not predictions_file_content["prediction_tasks"] or
-                # And flag if any 'predictions' keys are empty
-                any(not key.get("predictions") for key in predictions_file_content["prediction_tasks"])
+                not predictions_file_content["prediction_tasks"]
             ):
-                print("WARNING: 'prediction_tasks' key missing, empty, or one of the tasks has empty predictions.")
+                print("WARNING: 'prediction_tasks' key missing or empty.")
             else:
                 # Loop through each prediction_task from Predictor
                 # Calculate the correlation for each task separately
@@ -511,6 +509,25 @@ def calculate_and_save_metrics(saved_predictions_path, output_dir, sequence_ids=
         if specificity_results_df is not None and not specificity_results_df.empty:
             # Convert the DataFrame back to a list of dicts to easily combine them
             all_results.extend(specificity_results_df.to_dict('records'))
+
+        # Every metric gets a row: record "NaN" for any that could not be calculated (a task the Predictor could not
+        # perform, predictions that are not for exactly the sequences sent, or an HTTP error response)
+        task_metadata = {t.get("cell_type_requested"): [{k: v for k, v in t.items() if k != "predictions"}]
+                         for t in predictions_file_content.get("prediction_tasks") or [] if isinstance(t, dict)}
+        expected_metrics = [(f"Agarwal Joint MPRA ({c})", [c]) for c in measured_value_columns_map] + \
+                           [(f"Cell type specific expression ({c1} - {c2})", [c1, c2]) for c1, c2 in cell_type_pairs_for_specificity]
+        calculated = {row["description"] for row in all_results}
+        for description, cell_types in expected_metrics:
+            if description not in calculated:
+                all_results.append({
+                    "evaluator_name": EVALUATOR_NAME,
+                    "description": description,
+                    "predictor_name": predictor_name,
+                    "time_stamp": datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S.%f"),
+                    'metric': 'pearson_r',
+                    'value': "NaN",
+                    'prediction_task(s)_data': " - ".join(str(task_metadata.get(c, [])) for c in cell_types)
+                })
 
         # Save to a single CSV
         if all_results:
