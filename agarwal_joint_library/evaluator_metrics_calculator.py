@@ -24,7 +24,8 @@ def calculate_task_correlation(
     measured_value_column: str,
     seq_id_column: str,
     chromosome_column: str = None,
-    chromosomes_to_filter: list = None
+    chromosomes_to_filter: list = None,
+    sequence_ids: set = None
     ):
     
     """
@@ -38,6 +39,7 @@ def calculate_task_correlation(
         seq_id_column (str): The column name in measured_df that contains the sequence identifiers to merge on.
         chromosome_column (str, optional): The column name in measured_df that contains chromosome information (if filtering by chromosome is needed).
         chromosomes_to_filter (list, optional): List of chromosome names to filter by (if filtering by chromosome is needed).
+        sequence_ids (set, optional): IDs of the sequences sent to the Predictor. If given, the task is only scored if its predictions are for exactly these sequences.
         
     Returns:
         correlation_details (dict): Dictionary containing 'pearson_r' (float or None) and task metadata ("task_name", "task_type", "cell_type_actual")
@@ -77,6 +79,17 @@ def calculate_task_correlation(
         }
         return correlation_details
 
+    # Predictions are not for exactly the sequences that were sent (missing, extra or different sequence IDs)
+    if sequence_ids is not None and predictions_dict.keys() != sequence_ids:
+        print(f"Predictions of task '{task_name}' are not for exactly the {len(sequence_ids)} sequences that were sent: Skipping evaluation calculation")
+        correlation_details = {
+        'task_name': task_name, 
+        'task_type': task_type_actual,
+        'cell_type_actual': cell_type_actual,
+        'pearson_r': pearson_r_value
+        }
+        return correlation_details
+
     # --- Data Validation and processing ---
     print("--- Validating data ---")
     if not isinstance(predictions_dict, dict):
@@ -105,6 +118,8 @@ def calculate_task_correlation(
         predictions_df['Predicted_Value'] = predictions_df['Predicted_Value'].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x
             )
+        # A prediction that is not a finite number counts as a missing prediction (caught by the NaN check below)
+        predictions_df['Predicted_Value'] = pd.to_numeric(predictions_df['Predicted_Value'], errors='coerce').replace([np.inf, -np.inf], np.nan)
 
         # check if there are any NaN values in the prediction values before merging with measured_df
         # if there are NaNs in prediction values, skip the evaluation for this task
@@ -129,7 +144,7 @@ def calculate_task_correlation(
         measured_df_subset = measured_df[columns_to_keep].copy()
         # Use inner join to allow for subset testing.
         # This ensures we only evaluate on sequences present in BOTH the measured file and the predictions.
-        # Validation that the Predictor returned the correct number of sequences happens in evaluator_RestAPI.py.
+        # Validation that the Predictor returned predictions for exactly the sequences that were sent (sequence_ids) happens above.
         merged_df = pd.merge(measured_df_subset, predictions_df, on=seq_id_column, how="inner")
         
         # Filter by chromosome (if needed)
@@ -203,7 +218,8 @@ def calculate_cell_type_specificity(
     evaluator_name: str,
     predictor_name: str,
     cell_type_pairs: list,
-    measured_col_map: dict
+    measured_col_map: dict,
+    sequence_ids: set = None
     ):
     
     """
@@ -222,6 +238,7 @@ def calculate_cell_type_specificity(
         cell_type_pairs (list): A list of tuples, each containing cell types to be compared.  
         measured_col_map (dict): A dictionary mapping cell type names to their corresponding
                                  column names in the measured_df.
+        sequence_ids (set, optional): IDs of the sequences sent to the Predictor. If given, a task is only used if its predictions are for exactly these sequences.
     
     Returns:
         evaluation_output (pd.DataFrame): DataFrame containing the cell-type specificity results.
@@ -238,14 +255,19 @@ def calculate_cell_type_specificity(
         scale_prediction_actual = task.get("scale_prediction_actual")
         scale_prediction_requested = task.get("scale_prediction_requested")
         
-        # Skip if scale mismatch
-        if scale_prediction_actual != scale_prediction_requested:
-            print("Predictions scale does not match requested scale (log): Skipping calculation")
-            return None
-        
         # Skip if predictions are missing or contain an error
         if not predictions or "error" in predictions:
             print(f"Skipping cell type '{req_cell_type}' due to missing predictions or error.")
+            continue
+
+        # Skip if the predictions are not for exactly the sequences that were sent
+        if sequence_ids is not None and predictions.keys() != sequence_ids:
+            print(f"Skipping cell type '{req_cell_type}': predictions are not for exactly the {len(sequence_ids)} sequences that were sent.")
+            continue
+
+        # Skip if scale mismatch
+        if scale_prediction_actual != scale_prediction_requested:
+            print("Predictions scale does not match requested scale (log): Skipping cell type")
             continue
         
         # Convert predictions to DataFrame
@@ -254,7 +276,9 @@ def calculate_cell_type_specificity(
         df[f'prediction_{req_cell_type}'] = df[f'prediction_{req_cell_type}'].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x
         )
-        
+        # A prediction that is not a finite number counts as a missing prediction (caught by the NaN check below)
+        df[f'prediction_{req_cell_type}'] = pd.to_numeric(df[f'prediction_{req_cell_type}'], errors='coerce').replace([np.inf, -np.inf], np.nan)
+
         # Set index to 'name' for easier merging later
         predictions_data[f'prediction_{req_cell_type}'] = df.set_index(seq_id_column)[f'prediction_{req_cell_type}']
         
@@ -274,7 +298,7 @@ def calculate_cell_type_specificity(
     predictions_df = predictions_df.reset_index().rename(columns={'index': seq_id_column}) # Reset index to merge
     # Use inner join to allow for subset testing.
     # This ensures we only evaluate on sequences present in BOTH the measured file and the predictions.
-    # Validation that the Predictor returned the correct number of sequences happens in evaluator_RestAPI.py.
+    # Validation that the Predictor returned predictions for exactly the sequences that were sent (sequence_ids) happens above.
     merged_df = pd.merge(measured_df, predictions_df, left_on=seq_id_column, right_on=seq_id_column, how="inner") # Use inner join to ensure alignment
     
     if merged_df.empty:
@@ -346,7 +370,7 @@ def calculate_cell_type_specificity(
             
     return pd.DataFrame(evaluation_output)
 
-def calculate_and_save_metrics(saved_predictions_path, output_dir):
+def calculate_and_save_metrics(saved_predictions_path, output_dir, sequence_ids=None):
     """
     Calculates custom evaluation metrics and saves them to CSV files.
     This is the primary function to customize for a new evaluator.
@@ -406,11 +430,9 @@ def calculate_and_save_metrics(saved_predictions_path, output_dir):
             if (
                 "prediction_tasks" not in predictions_file_content or
                 # Also flag cases in case prediction_tasks key is returned empty
-                not predictions_file_content["prediction_tasks"] or
-                # And flag if any 'predictions' keys are empty
-                any(not key.get("predictions") for key in predictions_file_content["prediction_tasks"])
+                not predictions_file_content["prediction_tasks"]
             ):
-                print("WARNING: 'prediction_tasks' key missing, empty, or one of the tasks has empty predictions.")
+                print("WARNING: 'prediction_tasks' key missing or empty.")
             else:
                 # Loop through each prediction_task from Predictor
                 # Calculate the correlation for each task separately
@@ -437,7 +459,8 @@ def calculate_and_save_metrics(saved_predictions_path, output_dir):
                         measured_df=measured_df,
                         single_task_data=single_task_data_dict,
                         measured_value_column=measured_col_for_task,
-                        seq_id_column=seq_column # chromosome_column and chromosomes_to_filter_list can be added as arguments
+                        seq_id_column=seq_column, # chromosome_column and chromosomes_to_filter_list can be added as arguments
+                        sequence_ids=sequence_ids
                     )
                     
                     if task_correlation_dict:
@@ -472,7 +495,8 @@ def calculate_and_save_metrics(saved_predictions_path, output_dir):
                 evaluator_name=EVALUATOR_NAME,
                 predictor_name=predictor_name,
                 cell_type_pairs=cell_type_pairs_for_specificity,
-                measured_col_map=measured_value_columns_map
+                measured_col_map=measured_value_columns_map,
+                sequence_ids=sequence_ids
             )
         except Exception as e:
             print(f"An error occurred during cell-type specificity calculation: {e}")
@@ -489,6 +513,25 @@ def calculate_and_save_metrics(saved_predictions_path, output_dir):
         if specificity_results_df is not None and not specificity_results_df.empty:
             # Convert the DataFrame back to a list of dicts to easily combine them
             all_results.extend(specificity_results_df.to_dict('records'))
+
+        # Every metric gets a row: record "NaN" for any that could not be calculated (a task the Predictor could not
+        # perform, predictions that are not for exactly the sequences sent, or an HTTP error response)
+        task_metadata = {t.get("cell_type_requested"): [{k: v for k, v in t.items() if k != "predictions"}]
+                         for t in predictions_file_content.get("prediction_tasks") or [] if isinstance(t, dict)}
+        expected_metrics = [(f"Agarwal Joint MPRA ({c})", [c]) for c in measured_value_columns_map] + \
+                           [(f"Cell type specific expression ({c1} - {c2})", [c1, c2]) for c1, c2 in cell_type_pairs_for_specificity]
+        calculated = {row["description"] for row in all_results}
+        for description, cell_types in expected_metrics:
+            if description not in calculated:
+                all_results.append({
+                    "evaluator_name": EVALUATOR_NAME,
+                    "description": description,
+                    "predictor_name": predictor_name,
+                    "time_stamp": datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S.%f"),
+                    'metric': 'pearson_r',
+                    'value': "NaN",
+                    'prediction_task(s)_data': " - ".join(str(task_metadata.get(c, [])) for c in cell_types)
+                })
 
         # Save to a single CSV
         if all_results:

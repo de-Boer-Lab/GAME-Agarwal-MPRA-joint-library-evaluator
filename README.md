@@ -19,7 +19,7 @@ The evaluator:
 2. Creates JSON to send to Predictor
 3. Negotiates serialization format (JSON or MsgPack) with the Predictor
 4. POSTs all sequences to the predictor's `/predict` endpoint in a single request, across three prediction tasks (WTC11, K562, HepG2)
-5. Computes Pearson *r* between predicted expression (log scale) and measured log₂(RNA/DNA) values for each cell type
+5. Checks that each task's predictions are for exactly the sequences that were sent, then computes Pearson *r* between predicted expression (log scale) and measured log₂(RNA/DNA) values for each cell type
 6. Computes cell-type specificity metrics across all three cell-type pairs
 7. Saves raw predictions and a final evaluation summary CSV
 
@@ -94,7 +94,9 @@ Each request payload follows this structure:
 }
 ```
 
-**Sequence structure:** Each sequence is 200nt long and corresponds to the MPRA probes. The `prediction_ranges` coordinates correspond to the promoter region within the backbone, as defined in `upstream_downstream_backbone.txt`, and are shared across all sequences.
+**Sequence structure:** Each sequence is 200nt long and corresponds to the MPRA probes. The `prediction_ranges` coordinates correspond to the EGFP reporter gene within the full construct (see *Prediction ranges* below), as defined in `upstream_downstream_backbone.txt`, and are shared across all sequences.
+
+**Prediction ranges:** Ranges are 0-indexed and half-open (`start` is inclusive and `end` is exclusive), like Python slicing. They are positions in the full construct, i.e. the sequence after the upstream backbone and downstream backbone are added around the 200 nt probe. The shared range `[3147, 3867]` is exactly the 720 bp EGFP reporter gene, from its start codon to the end of its stop codon.
 
 ---
 
@@ -116,6 +118,20 @@ The measurements for each probe are stored in `56k_measured_file.xlsx` in the `e
   - HepG2 vs. WTC11
   - HepG2 vs. K562
   - WTC11 vs. K562
+
+### Scoring rules
+
+**Complete predictions are required.** The Evaluator sends a fixed set of sequences, and the Predictor (or the Predictor Distributor) must return a prediction for every one of them. The Evaluator never chooses which sequences to score: a task is scored only if its `predictions` hold exactly the sequence IDs that were sent, with no missing, extra or different IDs. This stops a Predictor from predicting only the sequences it does well on, or from adding made-up IDs to keep the count right, to get a better score.
+
+The summary CSV always has a row for each of the six metrics per run: a Pearson *r* for each of the three cell types and for each of the three cell-type pairs. The `value` column holds:
+
+| Value | When |
+|---|---|
+| a number | The metric was calculated. |
+| `0.0` | The Predictor returned valid predictions, but the result is zero or undefined because the data do not vary: constant (zero-variance) predictions, or identical predictions for the two cell types of a pair. |
+| `"NaN"` | The metric could not be calculated because of a protocol failure: the Predictor returned an error for the task (e.g. `prediction_request_failed` or `upstream_dependency_failed`), the task is missing from the response, its predictions are not for exactly the sequences that were sent, a prediction value is not a finite number (e.g. `null`), its scale is not the requested `log`, or the Predictor returned an HTTP error. |
+
+A cell-type pair is `"NaN"` if either of its two tasks is. The tasks that did succeed are still scored (a prediction value that is not a finite number, e.g. `null`, is the exception: it makes all three pairs `"NaN"`).
 
 ---
 

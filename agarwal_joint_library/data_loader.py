@@ -189,7 +189,7 @@ def create_json_from_xlsx():
         # Create a dictionary, mapping each sequence name to its corresponding sequence
         sequence_dict = dict(zip(names, sequences))
         
-        # Add predictions ranges that span the gene (69bp)
+        # Add predictions ranges that span the gene
         prediction_ranges = {name: promoter_coordinates for name in sequence_dict.keys()}
 
         # Define the prediction tasks as a separate variable
