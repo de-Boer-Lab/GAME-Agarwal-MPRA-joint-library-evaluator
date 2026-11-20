@@ -26,7 +26,7 @@ def run_evaluator(predictor_ip, predictor_port, output_dir):
     data_dict = create_json_from_xlsx()
 
     #Total number of sequences being sent to the Evaluator
-    #This is used to confirm the correct number of predictions will be returned from the Predictor
+    #This is only used for the count warning below (a task is scored only if its predictions are for exactly the sequences sent)
     total_sequences = len(data_dict["sequences"])
 
     # Communicate with Predictor, send request, receive predictions
@@ -90,24 +90,10 @@ def run_evaluator(predictor_ip, predictor_port, output_dir):
         print(f"FATAL: Could not save predictions to {saved_predictions_path}. {e}", file=sys.stderr)
         return
 
-    # Calculate and save final metrics
+    # Calculate and save final metrics. A task is only scored if its predictions are for exactly the sequences that were
+    # sent.
     if is_success_response:
-        all_lengths_match = True
-        # Loop through and check all the prediction tasks
-        for i, task in enumerate(response_payload.get("prediction_tasks", []), start=1):
-            preds = task.get("predictions", {})
-            # If this task has an error key, skip length validation for it
-            if "error" in preds:
-                print(f"Task {i} ('{task.get('name')}') returned an error -- skipping length check.")
-                continue
-            # Otherwise length of predictions needs to == the # of sequences
-            if len(preds) != total_sequences:
-                print(f"Warning: Task {i} ('{task.get('name')}') has {len(preds)} predictions, but {total_sequences} sequences were sent to the Predictor.")
-                all_lengths_match = False
-        if all_lengths_match:    
-            calculate_and_save_metrics(saved_predictions_path, output_dir)
-        else:
-            print("Skipping metric calculation because not all sequences got predictions.")
+        calculate_and_save_metrics(saved_predictions_path, output_dir, data_dict["sequences"].keys())
     else:
         print("Skipping metrics calculation because the Predictor did not return a 200 OK status.")
 
