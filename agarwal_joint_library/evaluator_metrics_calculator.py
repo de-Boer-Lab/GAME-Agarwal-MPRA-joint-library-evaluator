@@ -118,6 +118,8 @@ def calculate_task_correlation(
         predictions_df['Predicted_Value'] = predictions_df['Predicted_Value'].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x
             )
+        # A prediction that is not a finite number counts as a missing prediction (caught by the NaN check below)
+        predictions_df['Predicted_Value'] = pd.to_numeric(predictions_df['Predicted_Value'], errors='coerce').replace([np.inf, -np.inf], np.nan)
 
         # check if there are any NaN values in the prediction values before merging with measured_df
         # if there are NaNs in prediction values, skip the evaluation for this task
@@ -274,6 +276,8 @@ def calculate_cell_type_specificity(
         df[f'prediction_{req_cell_type}'] = df[f'prediction_{req_cell_type}'].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x
         )
+        # A prediction that is not a finite number counts as a missing prediction (caught by the NaN check below)
+        df[f'prediction_{req_cell_type}'] = pd.to_numeric(df[f'prediction_{req_cell_type}'], errors='coerce').replace([np.inf, -np.inf], np.nan)
 
         # Set index to 'name' for easier merging later
         predictions_data[f'prediction_{req_cell_type}'] = df.set_index(seq_id_column)[f'prediction_{req_cell_type}']
