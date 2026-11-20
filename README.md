@@ -6,7 +6,7 @@ Agarwal et al. (https://www.nature.com/articles/s41586-024-08430-9) MPRA evaluat
 
 - Main GAME Repository: [de-Boer-Lab/Genomic-API-for-Model-Evaluation](https://github.com/de-Boer-Lab/Genomic-API-for-Model-Evaluation)
 - GAME Documentation: [ReadTheDocs](https://genomic-api-for-model-evaluation-documentation.readthedocs.io)
-- Pre-built Evaluator container image and data: [Zenodo](https://zenodo.org/records/21135333)
+- Pre-built Evaluator container image and data: [Hugging Face](https://huggingface.co/datasets/deBoerLab/agarwal-jointLibrary-evaluator-GAME)
 - List of all [GAME Modules](https://github.com/de-Boer-Lab/GAME_modules)
 
 ---
@@ -28,7 +28,7 @@ Additional details about the Evaluator's data and the sequence file used can be 
 
 ### Run Evaluator using Apptainer container
 
-Download the container and evaluator data from Zenodo (see [Important Links](#important-links) above), then run:
+Download the container and evaluator data from Hugging Face (see [Important Links](#important-links) above), then run:
 
 ```bash
 apptainer run --containall \
