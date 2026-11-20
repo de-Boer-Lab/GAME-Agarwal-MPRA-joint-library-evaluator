@@ -55,7 +55,7 @@ Stage: build
     - Installed Python dependencies required by the Evaluator.
 
     **Usage:**
-    We encourage using pre-built containers for this model that are hosted on Zenodo.
+    We encourage using pre-built containers for this model that are hosted on Hugging Face.
 
     Bind these directories and run the container:
     ```bash
